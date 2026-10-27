@@ -44,6 +44,22 @@ def lan_addresses() -> list[str]:
 
 
 def focus_cc_switch(exe: Optional[str]) -> bool:
+    if sys.platform == "darwin":
+        # `open -a` both launches and activates an application, so it works
+        # whether CC Switch is already running or still closed.
+        app = exe if exe and Path(exe).is_dir() else "CC Switch"
+        try:
+            subprocess.run(
+                ["open", "-a", app],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except (OSError, subprocess.CalledProcessError) as error:
+            LOGGER.warning("Could not open CC Switch on macOS: %s", error)
+            return False
+
     if sys.platform != "win32":
         return False
 

@@ -4,6 +4,7 @@ import json
 import math
 import os
 import secrets
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
@@ -21,11 +22,22 @@ def default_config_path() -> Path:
 
 
 def default_cc_switch_exe() -> Optional[str]:
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if not local_app_data:
-        return None
-    candidate = Path(local_app_data) / "Programs" / "CC Switch" / "cc-switch.exe"
-    return str(candidate) if candidate.exists() else None
+    if sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if not local_app_data:
+            return None
+        candidate = Path(local_app_data) / "Programs" / "CC Switch" / "cc-switch.exe"
+        return str(candidate) if candidate.exists() else None
+
+    if sys.platform == "darwin":
+        for candidate in (
+            Path("/Applications/CC Switch.app"),
+            Path.home() / "Applications" / "CC Switch.app",
+        ):
+            if candidate.exists():
+                return str(candidate)
+
+    return None
 
 
 @dataclass

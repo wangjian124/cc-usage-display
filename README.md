@@ -1,6 +1,6 @@
 # CC Switch Usage Display
 
-把 Windows 上 [CC Switch](https://github.com/farion1231/cc-switch) 的 AI 用量常驻显示在微雪
+把 Windows 或 macOS 上 [CC Switch](https://github.com/farion1231/cc-switch) 的 AI 用量常驻显示在微雪
 **ESP32-C6-Touch-AMOLED-2.16**（480 × 480 AMOLED）上。固件同时是一个**带主页的启动器**：
 开机进主页，从图标网格里选用量面板、时钟、水平仪等小应用，也可以一键切进
 [xiaozhi](https://github.com/78/xiaozhi-esp32) 语音助手，长按按键再回到主页。
@@ -8,14 +8,14 @@
 ![界面总览](docs/preview/00-pages-preview.png)
 
 ```text
-CC Switch SQLite  -->  Windows Companion  --Wi-Fi / HTTP-->  ESP32-C6
+CC Switch SQLite  -->  Windows/macOS Companion  --Wi-Fi / HTTP-->  ESP32-C6
 ```
 
 设备**不读取 API Key**，只保存一个随机 Bearer Token；Companion 以**只读**方式打开
 CC Switch 的数据库，不修改网关配置。
 
 本项目移植自 [peterroe/magpie-usage-display](https://github.com/peterroe/magpie-usage-display)，
-把它的「macOS Companion + Magpie + BLE」换成了「Windows Companion + CC Switch + Wi-Fi/HTTP」，
+保留了它的 macOS Companion 思路，改成「Windows/macOS Companion + CC Switch + Wi-Fi/HTTP」，
 并换成 ESP32-C6 板子、加了主页启动器与多固件分区切换。
 
 ## 目录
@@ -55,7 +55,7 @@ CC Switch 的数据库，不修改网关配置。
 - `Settings`：亮度、熄屏时间等设置（写入 NVS）
 
 行为细节：用量面板每 15 秒拉取一次数据；60 秒无操作自动熄屏；Companion 可随 Windows
-登录自启并写轮转日志。
+登录或 macOS 登录项自启，并写轮转日志。
 
 用量面板的四页（按 `src/ui.cpp` 的布局与配色渲染，AMOLED 实物对比度更高）：
 
@@ -72,11 +72,11 @@ CC Switch 的数据库，不修改网关配置。
 ## 工作原理
 
 ```text
-%USERPROFILE%\.cc-switch\cc-switch.db      <- CC Switch 写入
+~/.cc-switch/cc-switch.db                  <- CC Switch 写入
         |
         |  只读 SELECT
         v
-Windows Companion (Python 标准库)
+Windows/macOS Companion (Python 标准库)
         |  HTTP + Bearer Token
         v
 ESP32-C6 启动器  --otadata-->  ota_0 启动器 / ota_1 xiaozhi
@@ -128,7 +128,7 @@ ESP32-C6 启动器  --otadata-->  ota_0 启动器 / ota_1 xiaozhi
 
 ## 环境要求
 
-- Windows 10 / 11
+- Windows 10 / 11，或 macOS 12+
 - 已安装并运行 [CC Switch](https://github.com/farion1231/cc-switch)，且其中已有用量记录
 - Python 3.10+（Companion 只用标准库）
 - PlatformIO Core
@@ -137,6 +137,8 @@ ESP32-C6 启动器  --otadata-->  ota_0 启动器 / ota_1 xiaozhi
 ## 快速开始
 
 ### 1. 启动 Companion
+
+#### Windows
 
 ```powershell
 cd .\companion
@@ -173,11 +175,44 @@ powershell -ExecutionPolicy Bypass -File .\uninstall_startup.ps1
 日志在 `%USERPROFILE%\.cc-usage-display\companion.log`。
 首次运行如弹出防火墙提示，请允许 Python 访问**专用网络**。
 
+#### macOS
+
+```bash
+cd ./companion
+./run.sh
+```
+
+首次启动会在 `~/.cc-usage-display/config.json` 生成配置和**随机 Token**。
+验证接口：
+
+```bash
+curl http://localhost:8787/health
+./run.sh --once
+```
+
+如需随 macOS 登录自启：
+
+```bash
+./install_launch_agent.sh
+./uninstall_launch_agent.sh
+```
+
+macOS 上 `/api/action/focus` 使用 `open -a "CC Switch"` 启动或激活 CC Switch。
+
 ### 2. 配置固件
+
+Windows PowerShell：
 
 ```powershell
 Set-Location <仓库根目录>
 Copy-Item .\include\secrets.example.h .\include\secrets.h
+```
+
+macOS / Linux shell：
+
+```bash
+cd <仓库根目录>
+cp include/secrets.example.h include/secrets.h
 ```
 
 编辑 `include/secrets.h`：
@@ -197,11 +232,23 @@ Copy-Item .\include\secrets.example.h .\include\secrets.h
 
 ### 3. 编译与烧录
 
-```powershell
-pio run                                             # 编译
+```text
+pio run                                             # 编译（Windows/macOS 都相同）
 pio device list                                     # 查串口
+```
+
+Windows 示例：
+
+```powershell
 pio run -t upload --upload-port COM5                # 烧录启动器
 pio device monitor --port COM5 --baud 115200        # 看日志
+```
+
+macOS 示例（把串口名替换成 `pio device list` 的实际结果）：
+
+```bash
+pio run -t upload --upload-port /dev/cu.usbmodemXXXX
+pio device monitor --port /dev/cu.usbmodemXXXX --baud 115200
 ```
 
 `bootloader.bin` 和 `partitions.bin` 由 PlatformIO 生成在
@@ -289,6 +336,8 @@ xiaozhi 里长按左键        -> 引导分区设回 ota_0，重启回主页
 esptool --chip esp32c6 --port COM5 erase-region 0xF000 0x2000
 ```
 
+macOS 上把 `COM5` 替换为 `pio device list` 显示的 `/dev/cu.*` 串口名。
+
 Windows 上也可以直接用仓库里的 `回到主页.cmd`（可选带串口号，默认 `COM5`）：
 
 ```powershell
@@ -297,14 +346,14 @@ Windows 上也可以直接用仓库里的 `回到主页.cmd`（可选带串口�
 
 ## 数据口径
 
-Companion 直接读取：
+Companion 直接读取（Windows 和 macOS 默认相同）：
 
 ```text
-%USERPROFILE%\.cc-switch\cc-switch.db
+~/.cc-switch/cc-switch.db
 ```
 
-也就是通常的 `C:\Users\<用户名>\.cc-switch\cc-switch.db`。
-不要用 `%APPDATA%\cc-switch` 下的旧数据库。
+Windows 上通常是 `C:\Users\<用户名>\.cc-switch\cc-switch.db`，macOS 上通常是
+`/Users/<用户名>/.cc-switch/cc-switch.db`。不要使用旧版或其他位置的数据库。
 
 统计会复用 CC Switch 的有效日志规则：当导入的 `codex_session` / `session_log` 与
 ±10 分钟内成功的代理请求在 token、模型和应用类型上一致时，只计代理请求，避免重复
@@ -313,7 +362,7 @@ Companion 直接读取：
 
 今日、7 天和 30 天都从请求明细计算；CC Switch 的 `usage_daily_rollups` 只保存超过
 约 30 天的归档，因此不影响本面板的 30 天窗口。费用来自 CC Switch 写入的
-`total_cost_usd`，Companion 再按 `%USERPROFILE%\.cc-usage-display\config.json` 里的
+`total_cost_usd`，Companion 再按 `~/.cc-usage-display/config.json` 里的
 `usd_to_cny` 汇率换算成人民币显示；如果供应商没有配置价格，费用可能显示为 `0.00`。
 
 ## 排障
@@ -323,7 +372,8 @@ Companion 直接读取：
 - 确认电脑和开发板在同一局域网。
 - 确认 `DASHBOARD_URL` 用的是电脑局域网 IP，不是 `127.0.0.1`。
 - 在电脑浏览器打开 `http://<电脑IP>:8787/health`。
-- 检查 Windows 防火墙和网络配置文件是否为「专用」。
+- Windows 上检查防火墙和网络配置文件是否为「专用」；macOS 上检查防火墙是否允许
+  Python 接受局域网连接。
 
 **接口返回 401**
 `secrets.h` 里的 Token 与 `config.json` 不一致。改完重新编译烧录。
@@ -333,7 +383,7 @@ Companion 直接读取：
 路径，以及 CC Switch 是否仍在写用量。
 
 **Token 或费用为 0**
-打开 `%USERPROFILE%\.cc-switch\cc-switch.db` 确认 `proxy_request_logs` 有数据。
+打开 `~/.cc-switch/cc-switch.db` 确认 `proxy_request_logs` 有数据。
 费用为 0 通常是对应供应商没配模型价格，不是面板算错。
 
 **屏幕黑屏**
@@ -344,9 +394,9 @@ Companion 直接读取：
 - 若完全没有串口输出，按住 BOOT 再插 USB 进入下载模式重新烧录。
 
 **Companion 启动失败**
-看 `%USERPROFILE%\.cc-usage-display\companion.log`，或前台跑 `companion\run.ps1`
-直接看异常。端口 `8787` 被占用时可以改 `config.json` 的 `port`，同时同步修改
-`secrets.h` 里的两个 URL。
+看 `~/.cc-usage-display/companion.log`，或前台运行 `companion/run.ps1`（Windows）或
+`companion/run.sh`（macOS）直接看异常。端口 `8787` 被占用时可以改 `config.json` 的
+`port`，同时同步修改 `secrets.h` 里的两个 URL。
 
 ## 目录结构
 
@@ -364,8 +414,11 @@ Companion 直接读取：
 │   ├── app_state.cpp / .h        用量数据结构
 │   ├── board_config.h            引脚定义
 │   └── sys.h / timeutil.h        平台封装与时间换算
-├── companion/                    Windows Companion（纯标准库 Python）
+├── companion/                    Windows/macOS Companion（纯标准库 Python）
 │   ├── cc_usage_display/         读取 CC Switch 数据库 + HTTP 服务
+│   ├── run.sh                     macOS 启动脚本
+│   ├── install_launch_agent.sh   macOS 登录自启
+│   ├── uninstall_launch_agent.sh 取消 macOS 登录自启
 │   └── tests/                    单元测试
 ├── include/
 │   └── secrets.example.h         配置模板（secrets.h 不入库）
@@ -377,9 +430,19 @@ Companion 直接读取：
 
 ## 开发与验证状态
 
+Windows PowerShell：
+
 ```powershell
-python -m pytest companion -q           # Companion 单元测试
-pio run                                 # 固件编译
+$env:PYTHONPATH = "companion"
+python -m unittest discover -s companion/tests -v
+pio run
+```
+
+macOS / Linux shell：
+
+```bash
+PYTHONPATH=companion python3 -m unittest discover -s companion/tests -v
+pio run
 ```
 
 - Companion 单元测试与真实 CC Switch 数据库快照已验证。
